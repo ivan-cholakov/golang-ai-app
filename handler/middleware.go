@@ -37,13 +37,13 @@ func WithUser(next http.Handler) http.Handler {
 		}
 
 		store := sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
-		session, err := store.Get(r, "user")
+		session, err := store.Get(r, sessionUserkey)
 		if err != nil {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		accessToken := session.Values["accessToken"]
+		accessToken := session.Values[sessionAccessTokenKey]
 		resp, err := sb.Client.Auth.User(r.Context(), accessToken.(string))
 
 		if err != nil {

@@ -12,6 +12,11 @@ import (
 	"github.com/nedpals/supabase-go"
 )
 
+const (
+	sessionUserkey        = "user"
+	sessionAccessTokenKey = "accessToken"
+)
+
 func HandleLoginIndex(w http.ResponseWriter, r *http.Request) error {
 	return render(r, w, auth.Login())
 }
@@ -99,16 +104,16 @@ func HandleAuthCallback(w http.ResponseWriter, r *http.Request) error {
 
 func setAuthSession(w http.ResponseWriter, r *http.Request, accessToken string) error {
 	store := sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
-	session, _ := store.Get(r, "user")
+	session, _ := store.Get(r, sessionUserkey)
 
-	session.Values["accessToken"] = accessToken
+	session.Values[sessionAccessTokenKey] = accessToken
 	return session.Save(r, w)
 }
 
 func HandleLogouCreate(w http.ResponseWriter, r *http.Request) error {
 	store := sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
-	session, _ := store.Get(r, "user")
-	session.Values["accessToken"] = ""
+	session, _ := store.Get(r, sessionUserkey)
+	session.Values[sessionAccessTokenKey] = ""
 	session.Save(r, w)
 
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
