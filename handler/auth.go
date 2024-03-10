@@ -6,7 +6,9 @@ import (
 	"dreampicai/view/auth"
 	"log/slog"
 	"net/http"
+	"os"
 
+	"github.com/gorilla/sessions"
 	"github.com/nedpals/supabase-go"
 )
 
@@ -74,7 +76,9 @@ func HandleLoginCreate(w http.ResponseWriter, r *http.Request) error {
 		}))
 	}
 
-	setAuthCookie(w, resp.AccessToken)
+	if err := setAuthSession(w, r, resp.AccessToken); err != nil {
+		return err
+	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 
 	return nil
@@ -86,33 +90,27 @@ func HandleAuthCallback(w http.ResponseWriter, r *http.Request) error {
 	if len(accessToken) == 0 {
 		return render(r, w, auth.CallbackScript())
 	}
-	setAuthCookie(w, accessToken)
+	if err := setAuthSession(w, r, accessToken); err != nil {
+		return err
+	}
 	http.Redirect(w, r, "/", http.StatusSeeOther)
 	return nil
 }
 
-func setAuthCookie(w http.ResponseWriter, accessToken string) {
-	cookie := &http.Cookie{
-		Value:    accessToken,
-		Name:     "at",
-		Path:     "/",
-		HttpOnly: true,
-		Secure:   true,
-	}
+func setAuthSession(w http.ResponseWriter, r *http.Request, accessToken string) error {
+	store := sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
+	session, _ := store.Get(r, "user")
 
-	http.SetCookie(w, cookie)
+	session.Values["accessToken"] = accessToken
+	return session.Save(r, w)
 }
 
 func HandleLogouCreate(w http.ResponseWriter, r *http.Request) error {
-	cookie := &http.Cookie{
-		Value:    "",
-		Name:     "at",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Path:     "/",
-		Secure:   true,
-	}
-	http.SetCookie(w, cookie)
+	store := sessions.NewCookieStore([]byte(os.Getenv("SESSION_SECRET")))
+	session, _ := store.Get(r, "user")
+	session.Values["accessToken"] = ""
+	session.Save(r, w)
+
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
 	return hxRedirect(w, r, "/")
 }
