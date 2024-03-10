@@ -4,12 +4,13 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"strings"
 	"unicode"
 )
 
 var (
 	emailRegex = regexp.MustCompile(`^[a-z0-9._%+\-]+@[a-z0-9.\-]+\.[a-z]{2,8}$`)
-	urlRegex   = regexp.MustCompile(`^(http(s)?://)?([\da-z\.-]+)\.([a-z\.]{2,6})([/\w \.-]*)*]?$`)
+	urlRegex   = regexp.MustCompile(`^(http(s)?://)?([\da-z\.-]+)\.([a-z\.]{2,6})([/\w \.-]*)*/?$`)
 )
 
 type RuleFunc func() RuleSet
@@ -27,38 +28,20 @@ type Fields map[string][]RuleSet
 
 type Messages map[string]string
 
-func Equal(n string) RuleFunc {
-	return func() RuleSet {
-		return RuleSet{
-			Name:      "equal",
-			RuleValue: n,
-			ValidateFunc: func(set RuleSet) bool {
-				str, ok := set.FieldValue.(string)
-				if !ok {
-					return false
-				}
-				return str == n
-			},
-			MessageFunc: func(set RuleSet) string {
-				return fmt.Sprintf("%s sould be equal", set.FieldName)
-			},
-		}
-	}
-}
-
 func Password() RuleSet {
 	return RuleSet{
 		Name: "password",
-		MessageFunc: func(set RuleSet) string {
-			return fmt.Sprintf("%s should be valid", set.FieldName)
-		},
-		ValidateFunc: func(rule RuleSet) bool {
-			str, ok := rule.FieldValue.(string)
+		//RuleValue: n,
+		ValidateFunc: func(set RuleSet) bool {
+			str, ok := set.FieldValue.(string)
 			if !ok {
 				return false
 			}
 			_, ok = ValidatePassword(str)
 			return ok
+		},
+		MessageFunc: func(set RuleSet) string {
+			return fmt.Sprintf("%s should be valid", set.FieldName)
 		},
 	}
 }
@@ -83,7 +66,8 @@ func Message(msg string) RuleFunc {
 	return func() RuleSet {
 		return RuleSet{
 			Name:      "message",
-			RuleValue: msg}
+			RuleValue: msg,
+		}
 	}
 }
 
@@ -114,16 +98,34 @@ func Email() RuleSet {
 			if !ok {
 				return false
 			}
-
 			return emailRegex.MatchString(email)
 		},
+	}
+}
+
+func Equal(s string) RuleFunc {
+	return func() RuleSet {
+		return RuleSet{
+			Name:      "max",
+			RuleValue: s,
+			ValidateFunc: func(set RuleSet) bool {
+				str, ok := set.FieldValue.(string)
+				if !ok {
+					return false
+				}
+				return str == s
+			},
+			MessageFunc: func(set RuleSet) string {
+				return fmt.Sprintf("%s should be equal %s", set.FieldName, s)
+			},
+		}
 	}
 }
 
 func Max(n int) RuleFunc {
 	return func() RuleSet {
 		return RuleSet{
-			Name:      "min",
+			Name:      "max",
 			RuleValue: n,
 			ValidateFunc: func(set RuleSet) bool {
 				str, ok := set.FieldValue.(string)
@@ -133,7 +135,7 @@ func Max(n int) RuleFunc {
 				return len(str) <= n
 			},
 			MessageFunc: func(set RuleSet) string {
-				return fmt.Sprintf("%s sould be maxiumum %d characters long", set.FieldName, n)
+				return fmt.Sprintf("%s should be maximum %d characters long", set.FieldName, n)
 			},
 		}
 	}
@@ -141,15 +143,18 @@ func Max(n int) RuleFunc {
 
 func Min(n int) RuleFunc {
 	return func() RuleSet {
-		return RuleSet{Name: "min", RuleValue: n, ValidateFunc: func(set RuleSet) bool {
-			str, ok := set.FieldValue.(string)
-			if !ok {
-				return false
-			}
-			return len(str) >= n
-		},
+		return RuleSet{
+			Name:      "min",
+			RuleValue: n,
+			ValidateFunc: func(set RuleSet) bool {
+				str, ok := set.FieldValue.(string)
+				if !ok {
+					return false
+				}
+				return len(str) >= n
+			},
 			MessageFunc: func(set RuleSet) string {
-				return fmt.Sprintf("%s sould be at least %d characters long", set.FieldName, n)
+				return fmt.Sprintf("%s should be at least %d characters long", set.FieldName, n)
 			},
 		}
 	}
@@ -174,6 +179,7 @@ func New(data any, fields Fields) *Validator {
 		data:   data,
 	}
 }
+
 func Validate(in any, out any, fields Fields) bool {
 	return true
 }
@@ -181,6 +187,7 @@ func Validate(in any, out any, fields Fields) bool {
 func (v *Validator) Validate(target any) bool {
 	ok := true
 	for fieldName, ruleSets := range v.fields {
+		// reflect panics on un-exported variables.
 		if !unicode.IsUpper(rune(fieldName[0])) {
 			continue
 		}
@@ -231,18 +238,23 @@ func getFieldValueByName(v any, name string) any {
 	fieldVal := val.FieldByName(name)
 	if !fieldVal.IsValid() {
 		return nil
-
 	}
-
 	return fieldVal.Interface()
 }
 
+// validatePassword checks if the password is strong and meets the criteria:
+// - At least 8 characters long
+// - Contains at least one digit
+// - Contains at least one lowercase letter
+// - Contains at least one uppercase letter
+// - Contains at least one special character
 func ValidatePassword(password string) (string, bool) {
 	var (
-		hasUpper   = false
-		hasLower   = false
-		hasNumber  = false
-		hasSpecial = false
+		hasUpper     = false
+		hasLower     = false
+		hasNumber    = false
+		hasSpecial   = false
+		specialRunes = "!@#$%^&*"
 	)
 
 	if len(password) < 8 {
@@ -257,23 +269,22 @@ func ValidatePassword(password string) (string, bool) {
 			hasLower = true
 		case unicode.IsDigit(char):
 			hasNumber = true
-		case unicode.IsSymbol(char):
+		case unicode.IsPunct(char) || unicode.IsSymbol(char) || strings.ContainsRune(specialRunes, char):
 			hasSpecial = true
 		}
 	}
 
 	if !hasUpper {
-		return "Password must contain an upper case character", false
+		return "Password must contain at least 1 uppercase character", false
 	}
 	if !hasLower {
-		return "Password must contain a lower case character", false
+		return "Password must contain at least 1 lowercase character", false
 	}
 	if !hasNumber {
-		return "Password must contain a number", false
+		return "Password must contain at least 1 numeric character (0, 1, 2, ...)", false
 	}
 	if !hasSpecial {
-		return "Password must contain a special character", false
+		return "Password must contain at least 1 special character (@, ;, _, ...)", false
 	}
 	return "", true
-
 }
