@@ -14,14 +14,14 @@ build:
 	tailwindcss -i view/css/app.css -o public/styles.css
 	@templ generate view
 	@go build -o bin/dreampicai main.go
-up:
+up: ## Database migration up
 	@go run cmd/migrate/main.go up
 
-down:
-	@go run cmd/migrate/main.go down
+reset:
+	@go run cmd/reset/main.go up
 
-drop:
-	@go run cmd/drop/main.go up
+down: ## Database migration down
+	@go run cmd/migrate/main.go down
 
 migration:
 	@migrate create -ext sql -dir cmd/migrate/migrations $(filter-out $@,$(MAKECMDGOALS))

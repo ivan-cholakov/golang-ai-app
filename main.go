@@ -1,6 +1,7 @@
 package main
 
 import (
+	"dreampicai/db"
 	"dreampicai/handler"
 	"dreampicai/pkg/sb"
 	"embed"
@@ -50,5 +51,10 @@ func initEverything() error {
 	if err := godotenv.Load(); err != nil {
 		return err
 	}
+
+	if err := db.Init(); err != nil {
+		return err
+	}
+
 	return sb.Init()
 }

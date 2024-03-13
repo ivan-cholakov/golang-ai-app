@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
 )
 
@@ -52,6 +53,7 @@ func WithUser(next http.Handler) http.Handler {
 		}
 
 		user := types.AuthenticatedUser{
+			ID:       uuid.MustParse(resp.ID),
 			Email:    resp.Email,
 			LoggedIn: true,
 		}
