@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"dreampicai/db"
 	"dreampicai/pkg/sb"
 	"dreampicai/pkg/validate"
+	"dreampicai/types"
 	"dreampicai/view/auth"
 	"log/slog"
 	"net/http"
@@ -16,6 +18,38 @@ const (
 	sessionUserkey        = "user"
 	sessionAccessTokenKey = "accessToken"
 )
+
+func HandleAccountSetupIndex(w http.ResponseWriter, r *http.Request) error {
+
+	return render(r, w, auth.AccountSetup())
+}
+
+func HandleAccountSetupCreate(w http.ResponseWriter, r *http.Request) error {
+	params := auth.AccountSetupParams{
+		Username: r.FormValue("username"),
+	}
+
+	var errors auth.AccountSetupErrors
+	ok := validate.New(&params, validate.Fields{
+		"Username": validate.Rules(validate.Min(2), validate.Max(50)),
+	}).Validate(&errors)
+
+	if !ok {
+		return render(r, w, auth.AccountSetup())
+	}
+
+	user := getAuthenticatedUser(r)
+	account := types.Account{
+		UserID:   user.ID,
+		Username: params.Username,
+	}
+
+	if err := db.CreateAcount(&account); err != nil {
+		return err
+	}
+	return hxRedirect(w, r, "/")
+
+}
 
 func HandleLoginIndex(w http.ResponseWriter, r *http.Request) error {
 	return render(r, w, auth.Login())
@@ -50,6 +84,7 @@ func HandleSignupCreate(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+
 	return render(r, w, auth.SignupSuccess(user.Email))
 }
 
